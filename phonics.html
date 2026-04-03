@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phonics Dictation Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 嚴格的 白/藍/綠/黃 配色主題，字體全黑 */
+        body { background-color: #eff6ff; color: #000000; font-family: 'Comic Sans MS', 'Arial', sans-serif; }
+        
+        /* 經典紅白配色的精靈球 */
+        .pokeball {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            /* 上半紅，下半白，中間黑線 */
+            background: linear-gradient(to bottom, #ef4444 47%, #1f2937 47%, #1f2937 53%, #ffffff 53%);
+            border: 6px solid #1f2937;
+            box-shadow: inset -10px -10px 15px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+        .pokeball::after {
+            content: '';
+            position: absolute;
+            width: 36px;
+            height: 36px;
+            background: #ffffff;
+            border: 6px solid #1f2937;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: inset -2px -2px 4px rgba(0,0,0,0.1);
+        }
+        .pokeball:hover { transform: scale(1.1) rotate(10deg); }
+        
+        @keyframes bounce-up {
+            from { transform: translateY(0); }
+            to { transform: translateY(-10px); }
+        }
+        .animate-bounce-up { animation: bounce-up 1s infinite alternate ease-in-out; }
+
+        /* 遊戲按鈕：母音(黃)、子音(藍) */
+        .vowel-btn { background-color: #fde047; border: 3px solid #eab308; color: #000000; }
+        .consonant-btn { background-color: #93c5fd; border: 3px solid #3b82f6; color: #000000; }
+        .letter-btn {
+            transition: transform 0.1s, box-shadow 0.1s;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+        }
+        .letter-btn:active:not(:disabled) {
+            transform: translateY(4px);
+            box-shadow: none !important;
+        }
+        .letter-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; }
+
+        /* 圖鑑表格專屬 CSS */
+        .map-card { background-color: #ffffff; border: 4px solid #93c5fd; border-radius: 16px; overflow: hidden; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .map-card-header { background-color: #86efac; padding: 12px 16px; font-size: 1.25rem; font-weight: bold; border-bottom: 4px solid #4ade80; color: #000000; }
+        .pokedex-table { width: 100%; border-collapse: collapse; background-color: #ffffff; }
+        .pokedex-table th { background-color: #bfdbfe; color: #000000; padding: 10px; border: 1px solid #93c5fd; font-weight: bold; text-align: left; }
+        .pokedex-table td { padding: 8px 10px; border: 1px solid #e0f2fe; color: #000000; font-size: 0.95rem; }
+        .pokedex-table tr:nth-child(even) { background-color: #f8fafc; }
+        .highlight-blue { color: #2563eb; font-weight: bold; }
+        .highlight-green { color: #16a34a; font-weight: bold; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-6 px-4">
+
+    <div class="w-full max-w-3xl flex flex-col sm:flex-row items-center justify-center gap-4 mb-10 mt-4">
+        
+        <div class="w-full sm:w-2/3 bg-white p-3 rounded-2xl shadow-sm border-4 border-dashed border-green-400 flex items-center gap-3">
+            <label for="level-select" class="font-bold whitespace-nowrap text-lg pl-2">🎯 Select Level:</label>
+            <select id="level-select" onchange="changeLevel()" class="w-full bg-blue-50 font-bold py-2 px-3 rounded-xl border-2 border-blue-400 outline-none cursor-pointer text-lg">
+                <option value="short_vowels">1. Short Vowels (cat)</option>
+                <option value="magic_e">2. Magic E (cake)</option>
+                <option value="digraphs">3. Digraphs (ship)</option>
+                <option value="blends">4. Blends (stop)</option>
+                <option value="vowel_teams">5. Vowel Teams (rain)</option>
+                <option value="r_controlled">6. R-Controlled (star)</option>
+                <option value="diphthongs">7. Diphthongs (coin)</option>
+            </select>
+        </div>
+
+        <button onclick="togglePokedex()" class="w-full sm:w-1/3 bg-blue-400 hover:bg-blue-500 font-bold py-4 px-4 rounded-2xl shadow-[0_4px_0_#2563eb] active:shadow-none active:translate-y-[4px] transition-all flex justify-center items-center gap-2 text-xl border-2 border-blue-600">
+            📖 Phonics Rules
+        </button>
+
+    </div>
+
+    <div id="capsule-container" class="flex flex-col items-center justify-center mb-6 h-48 mt-4">
+        <div id="capsule-label" class="font-bold text-xl mb-4 animate-bounce-up bg-white px-5 py-2 rounded-full border-2 border-black shadow-sm">
+            Click to Start!
+        </div>
+        <div class="pokeball" onclick="openCapsule()"></div>
+    </div>
+
+    <div id="message" class="text-2xl font-bold h-10 mb-4 text-center"></div>
+
+    <div id="letters-container" class="flex flex-wrap justify-center gap-3 sm:gap-4 min-h-[80px] mb-6 w-full max-w-lg"></div>
+    
+    <div id="word-builder-container" class="w-full max-w-md hidden">
+        <div id="word-builder" class="flex flex-wrap items-center justify-center gap-2 bg-white border-4 border-dashed border-blue-400 rounded-3xl min-h-[100px] p-6 text-6xl font-black tracking-widest mb-6 shadow-inner"></div>
+    </div>
+
+    <div class="flex flex-wrap justify-center gap-4 w-full max-w-md">
+        <button id="listen-again-btn" class="hidden flex-1 min-w-[140px] bg-yellow-400 hover:bg-yellow-500 font-bold py-3 px-6 rounded-full shadow-[0_4px_0_#ca8a04] active:shadow-none active:translate-y-[4px] border-2 border-yellow-600 text-lg" onclick="playTargetWord()">
+            🔊 Listen Again
+        </button>
+        <button id="reset-btn" class="hidden flex-1 min-w-[140px] bg-green-400 hover:bg-green-500 font-bold py-3 px-6 rounded-full shadow-[0_4px_0_#16a34a] active:shadow-none active:translate-y-[4px] border-2 border-green-600 text-lg" onclick="resetGame()">
+            🔄 Next Word
+        </button>
+    </div>
+
+    <div id="pokedex-modal" class="hidden fixed inset-0 bg-blue-50/95 backdrop-blur-md z-50 overflow-y-auto no-scrollbar p-4 sm:p-8">
+        <div class="max-w-7xl mx-auto bg-white p-6 rounded-3xl border-4 border-blue-300 shadow-2xl">
+            
+            <div class="flex justify-between items-center mb-6 border-b-4 border-green-400 pb-4 sticky top-0 bg-white z-10 pt-2">
+                <h2 class="text-3xl md:text-4xl font-extrabold bg-yellow-300 inline-block px-4 py-2 rounded-lg border-2 border-black">
+                    📖 Phonics Rules
+                </h2>
+                <button onclick="togglePokedex()" class="bg-red-500 hover:bg-red-600 text-white font-bold w-12 h-12 rounded-full text-2xl border-2 border-black shadow-md flex items-center justify-center transition-transform hover:scale-105">
+                    ✕
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="space-y-6">
+                    <div class="map-card">
+                        <div class="map-card-header">一、26個字母與母音基本音</div>
+                        <table class="pokedex-table">
+                            <tr><th>字母 (子音節錄)</th><th>發音與說明</th><th>例字</th></tr>
+                            <tr><td><span class="highlight-blue">C c</span></td><td>/k/ (a,o,u前)；/s/ (e,i,y前)</td><td>cat, city</td></tr>
+                            <tr><td><span class="highlight-blue">G g</span></td><td>/g/ (a,o,u前)；/dʒ/ (e,i,y前)</td><td>go, giant</td></tr>
+                            <tr><td><span class="highlight-blue">Q q</span></td><td>幾乎都和 u 一起，發 /kw/</td><td>queen</td></tr>
+                            <tr><td><span class="highlight-blue">X x</span></td><td>常見 /ks/，有時 /gz/</td><td>box, exam</td></tr>
+                            <tr><td><span class="highlight-blue">Y y</span></td><td>/j/、/aɪ/、/i/ (子音/母音)</td><td>yes, my, happy</td></tr>
+                            <tr><th colspan="3" class="bg-green-200">基本母音 (短音 / 長音)</th></tr>
+                            <tr><td><span class="highlight-green">A a</span></td><td>/æ/ (短) ／ /eɪ/ (長)</td><td>cat, cake</td></tr>
+                            <tr><td><span class="highlight-green">E e</span></td><td>/ɛ/ (短) ／ /iː/ (長)</td><td>bed, me</td></tr>
+                            <tr><td><span class="highlight-green">I i</span></td><td>/ɪ/ (短) ／ /aɪ/ (長)</td><td>sit, bike</td></tr>
+                            <tr><td><span class="highlight-green">O o</span></td><td>/ɑ/ (短) ／ /oʊ/ (長)</td><td>hot, home</td></tr>
+                            <tr><td><span class="highlight-green">U u</span></td><td>/ʌ/ (短) ／ /juː/ (長)</td><td>sun, cube</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="map-card">
+                        <div class="map-card-header">二、基礎規則 (短長母音 / 音節 / CVC)</div>
+                        <table class="pokedex-table">
+                            <tr><th>規則名稱</th><th>特徵與發音</th><th>例字</th></tr>
+                            <tr><td>閉音節 / 短母音</td><td>母音後有子音封住，念短音</td><td>cat, bed, napkin</td></tr>
+                            <tr><td>開音節 / 長母音</td><td>音節結尾是母音，念長音</td><td>he, go, tiger</td></tr>
+                            <tr><td>CVC 結構</td><td>子+母+子，中間念短音</td><td>pen, sit, hot</td></tr>
+                            <tr><td>CVCe (Magic e)</td><td>子+母+子+e，母音變長音</td><td>cake, bike, home</td></tr>
+                            <tr><td>Consonant-le</td><td>子音+le 成最後音節 (/əl/)</td><td>table, purple</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="map-card">
+                        <div class="map-card-header">三、Magic e / Silent e 與雙寫規則</div>
+                        <table class="pokedex-table">
+                            <tr><th>拼法</th><th>發音變化說明</th><th>例字</th></tr>
+                            <tr><td>a_e / i_e</td><td>a 變 /eɪ/；i 變 /aɪ/</td><td>cap→cape, kit→kite</td></tr>
+                            <tr><td>o_e / u_e</td><td>o 變 /oʊ/；u 變 /juː/</td><td>not→note, cub→cube</td></tr>
+                            <tr><th colspan="3" class="bg-green-200">其他 Silent e 與雙寫規則</th></tr>
+                            <tr><td>避免 v 結尾</td><td>英文單字不直接以 v 結尾</td><td>have, give</td></tr>
+                            <tr><td>短母音雙寫</td><td>單子音結尾前為短母音需雙寫</td><td>rabbit, running</td></tr>
+                        </table>
+                    </div>
+                    
+                    <div class="map-card">
+                        <div class="map-card-header">四、常見不發音字母與 GH 特殊發音</div>
+                        <table class="pokedex-table">
+                            <tr><th>組合</th><th>說明</th><th>例字</th></tr>
+                            <tr><td>kn- / wr-</td><td>k, w 不發音</td><td>knife, wrong</td></tr>
+                            <tr><td>gn- / -mb</td><td>g, b 不發音</td><td>sign, comb</td></tr>
+                            <tr><td>-lk / -bt</td><td>l 弱化/不發音，b 不發音</td><td>walk, doubt</td></tr>
+                            <tr><th colspan="3" class="bg-green-200">GH 家族規則</th></tr>
+                            <tr><td>igh / gh 不發音</td><td>發 /aɪ/ 或 gh 隱形</td><td>light, though</td></tr>
+                            <tr><td>gh = /f/</td><td>發 f 的聲音</td><td>laugh, cough</td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="map-card">
+                        <div class="map-card-header">五、子音雙字母與混合音 (Blends)</div>
+                        <table class="pokedex-table">
+                            <tr><th>組合</th><th>說明</th><th>例字</th></tr>
+                            <tr><td>sh / ch</td><td>「噓」音 / 「ㄑ」音</td><td>ship, chair</td></tr>
+                            <tr><td>th (清/濁)</td><td>舌碰牙齒 (thin/this)</td><td>bath, mother</td></tr>
+                            <tr><td>ph / wh</td><td>發 f 音 / 發 w 音</td><td>phone, white</td></tr>
+                            <tr><td>ng / ck</td><td>鼻音尾 / 短母音後發k</td><td>sing, duck</td></tr>
+                            <tr><th colspan="3" class="bg-green-200">常見子音混合 (每個音都保留)</th></tr>
+                            <tr><td>L 混合</td><td>bl, cl, fl, gl, pl, sl</td><td>blue, clock, play</td></tr>
+                            <tr><td>R 混合</td><td>br, cr, dr, fr, gr, pr, tr</td><td>bread, drum, tree</td></tr>
+                            <tr><td>S 混合</td><td>sk, sm, sn, sp, st, sw</td><td>skip, smile, stop</td></tr>
+                            <tr><td>三子音開頭</td><td>str, spr, scr, spl, shr</td><td>street, spring</td></tr>
+                            <tr><td>結尾混合</td><td>-nd, -st, -mp, -ft, -lt, -sk</td><td>hand, nest, jump</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="map-card">
+                        <div class="map-card-header">六、母音團隊 (Vowel Teams) & 雙母音</div>
+                        <table class="pokedex-table">
+                            <tr><th>組合</th><th>發音與說明</th><th>例字</th></tr>
+                            <tr><td>ai / ay</td><td>長 a 音 /eɪ/ (字中/字尾)</td><td>rain, day</td></tr>
+                            <tr><td>ee / ea</td><td>長 e 音 /iː/ (ea也有例外)</td><td>tree, eat, (例外:bread)</td></tr>
+                            <tr><td>oa / ow</td><td>長 o 音 /oʊ/ (ow也有/aʊ/)</td><td>boat, snow, (cow)</td></tr>
+                            <tr><td>ie / igh</td><td>長 i 音 /aɪ/</td><td>pie, light</td></tr>
+                            <tr><td>ue / ew / ui</td><td>長 u 音 /juː/ 或 /uː/</td><td>blue, new, fruit</td></tr>
+                            <tr><td>oo (長/短)</td><td>/uː/ (moon) 或 /ʊ/ (book)</td><td>food, look</td></tr>
+                            <tr><th colspan="3" class="bg-green-200">雙母音 (Diphthongs)</th></tr>
+                            <tr><td>oi / oy</td><td>發「喔依」/ɔɪ/</td><td>coin, boy</td></tr>
+                            <tr><td>ou / ow</td><td>發「奧」/aʊ/</td><td>house, cow</td></tr>
+                            <tr><td>au / aw</td><td>發「喔」長音 /ɔ/</td><td>August, draw</td></tr>
+                        </table>
+                    </div>
+
+                    <div class="map-card">
+                        <div class="map-card-header">七、R 控制母音 (R-Controlled) & Schwa</div>
+                        <table class="pokedex-table">
+                            <tr><th>組合</th><th>說明</th><th>例字</th></tr>
+                            <tr><td>ar / or</td><td>/ɑr/ (阿兒) / /ɔr/ (喔兒)</td><td>car, star, corn, fork</td></tr>
+                            <tr><td>er / ir / ur</td><td>/ɝ/ 捲舌弱母音 (厄兒)</td><td>her, bird, nurse</td></tr>
+                            <tr><td>air / are</td><td>/ɛr/ 類似 air 的音</td><td>hair, care</td></tr>
+                            <tr><td>ear</td><td>多變 (/ɪr/, /ɛr/, /ɝ/)</td><td>hear, bear, learn</td></tr>
+                            <tr><th colspan="3" class="bg-green-200">Schwa 弱母音 /ə/</th></tr>
+                            <tr><td>非重音弱讀</td><td>母音在非重音節常弱化</td><td><span class="underline">a</span>bout, banan<span class="underline">a</span></td></tr>
+                        </table>
+                    </div>
+
+                    <div class="map-card">
+                        <div class="map-card-header">八、字首、字尾與詞尾變化 (-s, -ed)</div>
+                        <table class="pokedex-table">
+                            <tr><th>字首/字尾</th><th>發音與規則</th><th>例字</th></tr>
+                            <tr><td>-s / -es</td><td>/s/ (清後), /z/ (濁後), /ɪz/ (s,x,ch後)</td><td>cats, dogs, boxes</td></tr>
+                            <tr><td>-ed</td><td>/t/ (清後), /d/ (濁後), /ɪd/ (t,d後)</td><td>looked, played, wanted</td></tr>
+                            <tr><td>-tch / -dge</td><td>常接在短母音後 (/tʃ/, /dʒ/)</td><td>catch, bridge</td></tr>
+                            <tr><td>-tion / -sion</td><td>/ʃən/ 或 /ʒən/</td><td>action, vision</td></tr>
+                            <tr><td>-ture / -sure</td><td>/tʃər/ 或 /ʒər/</td><td>picture, measure</td></tr>
+                            <tr><td>un-, re-, dis-</td><td>常見字首發音</td><td>undo, redo, dislike</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 大幅擴充的單字庫：每個關卡 20 個字
+        const gameData = {
+            short_vowels: [
+                "cat", "dog", "pig", "sun", "hat", "bed", "pen", "map", "log", "bug",
+                "jam", "net", "fox", "cup", "bat", "lip", "pot", "nut", "web", "six"
+            ],
+            magic_e: [
+                "cake", "bike", "nose", "tube", "kite", "rose", "game", "time", "bone", "cube",
+                "face", "wave", "five", "rope", "mule", "hole", "nine", "page", "mice", "tape"
+            ],
+            digraphs: [
+                "ship", "chat", "thin", "math", "fish", "chop", "shop", "that", "chin", "shut",
+                "bath", "whip", "rich", "wish", "much", "path", "dish", "then", "when", "dash"
+            ],
+            blends: [
+                "stop", "black", "crab", "star", "play", "frog", "flag", "drum", "tree", "skip",
+                "plum", "club", "slip", "swim", "glad", "plan", "drop", "spot", "step", "twin"
+            ],
+            vowel_teams: [
+                "rain", "boat", "leaf", "tree", "goat", "tail", "mail", "read", "coat", "soap",
+                "wait", "seed", "meal", "road", "toad", "paid", "meat", "foam", "sail", "train"
+            ],
+            r_controlled: [
+                "star", "bird", "fork", "corn", "farm", "girl", "car", "park", "dirt", "shirt",
+                "horn", "pork", "hard", "yard", "turn", "burn", "hurt", "dark", "storm", "curl"
+            ],
+            diphthongs: [
+                "coin", "boy", "cow", "toy", "owl", "town", "out", "house", "loud", "foil",
+                "boil", "joy", "clown", "down", "shout", "mouse", "point", "soil", "brown", "round"
+            ]
+        };
+
+        const vowels = ['a', 'e', 'i', 'o', 'u'];
+        let currentWord = "";
+        let builtWord = "";
+
+        function speak(text, rate = 0.85) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US'; 
+            utterance.rate = rate;    
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function isVowel(char) { return vowels.includes(char.toLowerCase()); }
+        function changeLevel() { resetGame(); }
+
+        function togglePokedex() {
+            document.getElementById('pokedex-modal').classList.toggle('hidden');
+        }
+
+        function openCapsule() {
+            const level = document.getElementById("level-select").value;
+            const wordsList = gameData[level];
+            currentWord = wordsList[Math.floor(Math.random() * wordsList.length)];
+            
+            let shuffledArr = currentWord.split('').sort(() => 0.5 - Math.random());
+
+            document.getElementById("capsule-container").classList.add("hidden");
+            document.getElementById("word-builder-container").classList.remove("hidden");
+            document.getElementById("reset-btn").classList.remove("hidden");
+            document.getElementById("listen-again-btn").classList.remove("hidden");
+            
+            const msgEl = document.getElementById("message");
+            msgEl.innerText = "🔊 Listen and spell the word!";
+            msgEl.className = "text-2xl font-bold h-10 mb-4 text-center text-blue-700 bg-white px-4 py-1 rounded-full border-2 border-blue-400 inline-block shadow-sm";
+            
+            const lettersContainer = document.getElementById("letters-container");
+            lettersContainer.innerHTML = "";
+            const builderEl = document.getElementById("word-builder");
+            builderEl.innerHTML = "";
+            builderEl.classList.remove("border-red-500", "border-green-500");
+            builderEl.classList.add("border-blue-400");
+            builtWord = "";
+
+            shuffledArr.forEach((letter) => {
+                let btn = document.createElement("button");
+                const typeClass = isVowel(letter) ? "vowel-btn" : "consonant-btn";
+                
+                btn.className = `letter-btn w-14 h-14 sm:w-16 sm:h-16 text-3xl sm:text-4xl font-extrabold rounded-xl ${typeClass} lowercase flex items-center justify-center`;
+                btn.innerText = letter;
+                
+                btn.onclick = function() {
+                    speak(letter, 0.7); 
+                    appendLetter(letter, this);
+                };
+                lettersContainer.appendChild(btn);
+            });
+            
+            playTargetWord();
+        }
+
+        function playTargetWord() { speak(currentWord, 0.8); }
+
+        function appendLetter(letter, btnElement) {
+            builtWord += letter;
+            let wordBuilder = document.getElementById("word-builder");
+            let letterSpan = document.createElement("span");
+            letterSpan.innerText = letter;
+            letterSpan.className = "text-black";
+            wordBuilder.appendChild(letterSpan);
+            
+            btnElement.disabled = true; 
+            if (builtWord.length === currentWord.length) { checkWord(); }
+        }
+
+        function checkWord() {
+            let msgEl = document.getElementById("message");
+            let builderEl = document.getElementById("word-builder");
+
+            if (builtWord === currentWord) {
+                msgEl.innerText = "✨ Awesome! You got it! ✨";
+                msgEl.className = "text-2xl font-bold h-10 mb-4 text-center text-green-700 bg-green-100 px-4 py-1 rounded-full border-2 border-green-500 inline-block shadow-sm";
+                builderEl.classList.replace("border-blue-400", "border-green-500");
+                setTimeout(() => { speak("Excellent! " + currentWord); }, 500);
+            } else {
+                msgEl.innerText = "❌ Oops! Try again!";
+                msgEl.className = "text-2xl font-bold h-10 mb-4 text-center text-red-700 bg-red-100 px-4 py-1 rounded-full border-2 border-red-500 inline-block shadow-sm";
+                builderEl.classList.replace("border-blue-400", "border-red-500");
+                speak("Try again!", 0.9);
+                setTimeout(() => { resetLetters(); playTargetWord(); }, 1500);
+            }
+        }
+
+        function resetLetters() {
+            builtWord = "";
+            let builderEl = document.getElementById("word-builder");
+            builderEl.innerHTML = "";
+            builderEl.classList.remove("border-red-500", "border-green-500");
+            builderEl.classList.add("border-blue-400");
+            
+            let msgEl = document.getElementById("message");
+            msgEl.innerText = "🔊 Listen and spell the word!";
+            msgEl.className = "text-2xl font-bold h-10 mb-4 text-center text-blue-700 bg-white px-4 py-1 rounded-full border-2 border-blue-400 inline-block shadow-sm";
+            
+            document.querySelectorAll(".letter-btn").forEach(btn => btn.disabled = false);
+        }
+
+        function resetGame() {
+            document.getElementById("capsule-container").classList.remove("hidden");
+            document.getElementById("word-builder-container").classList.add("hidden");
+            document.getElementById("letters-container").innerHTML = "";
+            document.getElementById("word-builder").innerHTML = "";
+            document.getElementById("listen-again-btn").classList.add("hidden");
+            document.getElementById("reset-btn").classList.add("hidden");
+            document.getElementById("message").innerText = "";
+            document.getElementById("message").className = "text-2xl font-bold h-10 mb-4 text-center";
+            builtWord = "";
+            window.speechSynthesis.cancel();
+        }
+    </script>
+</body>
+</html>
